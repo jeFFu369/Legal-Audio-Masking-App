@@ -5,82 +5,485 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Legal Audio Masking App</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-        .warning { background-color: #ffcccc; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-        .controls { margin: 20px 0; }
-        button { padding: 10px 20px; margin: 5px; }
-        #dbDisplay, #maskingDbDisplay { font-size: 24px; font-weight: bold; color: #333; }
-        #maskingDbDisplay { color: #0066cc; }
-        .meter { background: #f0f0f0; border-radius: 5px; padding: 10px; margin: 10px 0; }
-        .spectrum-container { width: 100%; height: 200px; background: #111; border-radius: 5px; margin: 10px 0; }
-        #spectrumCanvas { width: 100%; height: 100%; }
-        .auto-container { margin: 15px 0; padding: 10px; background: #e6f3ff; border-radius: 5px; }
-        .timer-container { margin: 15px 0; padding: 10px; background: #f0f8ff; border-radius: 5px; }
-        select, input[type="range"], input[type="number"] { margin: 5px 0; }
+        /* Modern Dark Theme with Futuristic Elements */
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Rajdhani:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --primary-bg: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #2a2f4a 100%);
+            --card-bg: rgba(26, 31, 58, 0.8);
+            --neon-blue: #00ffff;
+            --neon-pink: #ff00ff;
+            --neon-green: #00ff88;
+            --text-primary: #e0e0ff;
+            --text-secondary: #a0a0ff;
+            --warning-bg: rgba(255, 0, 80, 0.1);
+            --warning-border: #ff0055;
+            --success: #00ff88;
+            --danger: #ff0055;
+            --shadow: 0 8px 32px rgba(0, 255, 255, 0.1);
+            --border-radius: 12px;
+        }
+        
+        /* Keyframe Animations */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.7;
+            }
+        }
+        
+        @keyframes glow {
+            0%, 100% {
+                box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+            }
+            50% {
+                box-shadow: 0 0 40px rgba(0, 255, 255, 0.6);
+            }
+        }
+        
+        @keyframes dBUpdate {
+            from {
+                transform: scale(1.2);
+                opacity: 0.7;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: var(--primary-bg);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 20px;
+            background-attachment: fixed;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            font-family: 'Orbitron', monospace;
+            font-size: 2.5rem;
+            text-align: center;
+            margin-bottom: 30px;
+            color: var(--neon-blue);
+            text-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+            letter-spacing: 2px;
+        }
+        
+        .warning {
+            background: var(--warning-bg);
+            border: 1px solid var(--warning-border);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+        }
+        
+        .warning strong {
+            color: var(--danger);
+            font-weight: 600;
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            animation: fadeIn 0.5s ease-out forwards;
+            opacity: 0;
+        }
+
+        .card:nth-child(1) { animation-delay: 0.1s; }
+        .card:nth-child(2) { animation-delay: 0.2s; }
+        .card:nth-child(3) { animation-delay: 0.3s; }
+        .card:nth-child(4) { animation-delay: 0.4s; }
+        .card:nth-child(5) { animation-delay: 0.5s; }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 255, 255, 0.15);
+        }
+        
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .meter {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            gap: 30px;
+            padding: 20px;
+            background: rgba(0, 255, 255, 0.05);
+            border-radius: var(--border-radius);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+        }
+        
+        .meter p {
+            text-align: center;
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+        }
+        
+        #dbDisplay, #maskingDbDisplay {
+            font-size: 2.5rem;
+            font-weight: 700;
+            display: block;
+            margin-top: 5px;
+            font-family: 'Orbitron', monospace;
+            transition: all 0.3s ease;
+        }
+
+        .db-updating {
+            animation: dBUpdate 0.5s ease-out;
+        }
+        
+        #dbDisplay {
+            color: var(--neon-pink);
+            text-shadow: 0 0 15px rgba(255, 0, 255, 0.6);
+        }
+        
+        #maskingDbDisplay {
+            color: var(--neon-green);
+            text-shadow: 0 0 15px rgba(0, 255, 136, 0.6);
+        }
+        
+        .button-group {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        button {
+            padding: 12px 30px;
+            font-family: 'Orbitron', monospace;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        button:hover::before {
+            left: 100%;
+        }
+        
+        #startBtn {
+            background: linear-gradient(135deg, var(--neon-green), rgba(0, 255, 136, 0.5));
+            color: #002d1a;
+        }
+        
+        #startBtn:hover {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.8), var(--neon-green));
+            box-shadow: 0 6px 20px rgba(0, 255, 136, 0.4);
+            transform: translateY(-2px);
+        }
+        
+        #stopBtn {
+            background: linear-gradient(135deg, var(--danger), rgba(255, 0, 85, 0.5));
+            color: #fff;
+        }
+        
+        #stopBtn:hover {
+            background: linear-gradient(135deg, rgba(255, 0, 85, 0.8), var(--danger));
+            box-shadow: 0 6px 20px rgba(255, 0, 85, 0.4);
+            transform: translateY(-2px);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .control-row {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin: 15px 0;
+        }
+        
+        label {
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+        
+        select, input[type="range"], input[type="number"] {
+            width: 100%;
+            padding: 10px 15px;
+            background: rgba(0, 255, 255, 0.05);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+        
+        select:focus, input[type="range"]:focus, input[type="number"]:focus {
+            outline: none;
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+        }
+        
+        select {
+            cursor: pointer;
+        }
+        
+        select option {
+            background: #1a1f3a;
+            color: var(--text-primary);
+        }
+        
+        input[type="range"] {
+            -webkit-appearance: none;
+            height: 6px;
+            background: rgba(0, 255, 255, 0.1);
+            outline: none;
+            border-radius: 3px;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: var(--neon-blue);
+            cursor: pointer;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.7);
+            transition: all 0.2s ease;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.9);
+        }
+        
+        input[type="number"] {
+            width: 80px;
+        }
+        
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            accent-color: var(--neon-blue);
+            cursor: pointer;
+        }
+        
+        .spectrum-container {
+            width: 100%;
+            height: 250px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+        
+        #spectrumCanvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .auto-container, .timer-container {
+            background: rgba(0, 255, 255, 0.05);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            border: 1px solid rgba(0, 255, 255, 0.1);
+        }
+        
+        .timer-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        #setTimerBtn {
+            background: linear-gradient(135deg, var(--neon-blue), rgba(0, 255, 255, 0.5));
+            color: #002d3a;
+            padding: 8px 15px;
+            font-size: 0.9rem;
+        }
+        
+        #setTimerBtn:hover {
+            background: linear-gradient(135deg, rgba(0, 255, 255, 0.8), var(--neon-blue));
+            box-shadow: 0 4px 15px rgba(0, 255, 255, 0.4);
+        }
+        
+        #timerStatus {
+            color: var(--neon-green);
+            font-weight: 600;
+            font-family: 'Orbitron', monospace;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            body {
+                padding: 15px;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .meter {
+                flex-direction: column;
+                gap: 20px;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+            
+            .timer-controls {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            input[type="number"] {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="warning">
-        <strong>WARNING:</strong> Use only for personal noise reduction. Keep volume within local legal limits.
-        <br>Recommended: Keep masking volume 3-5 dB above intrusive sound for optimal effectiveness.
-    </div>
-    
-    <h1>Legal Audio Masking App</h1>
-    
-    <div class="controls">
-        <div class="meter">
-            <p>Current Noise Level: <span id="dbDisplay">---</span> dB</p>
-            <p>Masking Output Level: <span id="maskingDbDisplay">---</span> dB</p>
+    <div class="container">
+        <h1>Legal Audio Masking App</h1>
+        
+        <div class="warning">
+            <strong>WARNING:</strong> Use only for personal noise reduction. Keep volume within local legal limits.
+            <br>Recommended: Keep masking volume 3-5 dB above intrusive sound for optimal effectiveness.
         </div>
         
-        <button id="startBtn">Start Masking</button>
-        <button id="stopBtn">Stop Masking</button>
-        <br>
-        
-        <label>
-            Noise Type:
-            <select id="noiseTypeSelect">
-                <option value="pink" selected>Pink Noise (Most Effective)</option>
-                <option value="white">White Noise</option>
-                <option value="brown">Brown Noise</option>
-            </select>
-        </label>
-        <br>
-        
-        <label>
-            Masking Volume:
-            <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.5">
-            <span id="volumeValue">50%</span>
-        </label>
-        <br>
-        
-        <label>
-            Frequency Focus (Hz):
-            <select id="freqSelect">
-                <option value="all">All Frequencies</option>
-                <option value="voice" selected>Voice Range (200-3000Hz) - Optimal for Speech Masking</option>
-                <option value="low">Low Frequencies (50-200Hz)</option>
-                <option value="high">High Frequencies (3000-8000Hz)</option>
-            </select>
-        </label>
-        
-        <div class="auto-container">
-            <label>
-                <input type="checkbox" id="autoAdjust" checked>
-                Auto-Adjust Volume (Maintain 4 dB above background noise)
-            </label>
-        </div>
-        
-        <div class="timer-container">
-            <label>
-                Run for: <input type="number" id="timerMinutes" min="1" max="120" value="15"> minutes
-                <button id="setTimerBtn">Set Timer</button>
-            </label>
-            <p>Timer Status: <span id="timerStatus">Not Set</span></p>
-        </div>
-        
-        <div class="spectrum-container">
-            <canvas id="spectrumCanvas"></canvas>
+        <div class="controls">
+            <!-- Status Card -->
+            <div class="card">
+                <div class="meter">
+                    <p>Current Noise Level: <span id="dbDisplay">---</span> dB</p>
+                    <p>Masking Output Level: <span id="maskingDbDisplay">---</span> dB</p>
+                </div>
+            </div>
+            
+            <!-- Main Controls Card -->
+            <div class="card">
+                <div class="button-group">
+                    <button id="startBtn">Start Masking</button>
+                    <button id="stopBtn">Stop Masking</button>
+                </div>
+            </div>
+            
+            <!-- Noise Settings Card -->
+            <div class="card">
+                <div class="control-row">
+                    <label for="noiseTypeSelect">Noise Type:</label>
+                    <select id="noiseTypeSelect">
+                        <option value="pink" selected>Pink Noise (Most Effective)</option>
+                        <option value="white">White Noise</option>
+                        <option value="brown">Brown Noise</option>
+                    </select>
+                </div>
+                
+                <div class="control-row">
+                    <label for="volumeSlider">Masking Volume: <span id="volumeValue">50%</span></label>
+                    <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.5">
+                </div>
+                
+                <div class="control-row">
+                    <label for="freqSelect">Frequency Focus (Hz):</label>
+                    <select id="freqSelect">
+                        <option value="all">All Frequencies</option>
+                        <option value="voice" selected>Voice Range (200-3000Hz) - Optimal for Speech Masking</option>
+                        <option value="low">Low Frequencies (50-200Hz)</option>
+                        <option value="high">High Frequencies (3000-8000Hz)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Advanced Settings Card -->
+            <div class="card">
+                <div class="auto-container">
+                    <div class="checkbox-container">
+                        <input type="checkbox" id="autoAdjust" checked>
+                        <label for="autoAdjust">Auto-Adjust Volume (Maintain 4 dB above background noise)</label>
+                    </div>
+                </div>
+                
+                <div class="timer-container">
+                    <div class="timer-controls">
+                        <label for="timerMinutes">Run for:</label>
+                        <input type="number" id="timerMinutes" min="1" max="120" value="15">
+                        <label>minutes</label>
+                        <button id="setTimerBtn">Set Timer</button>
+                    </div>
+                    <p>Timer Status: <span id="timerStatus">Not Set</span></p>
+                </div>
+            </div>
+            
+            <!-- Spectrum Analyzer Card -->
+            <div class="card">
+                <div class="spectrum-container">
+                    <canvas id="spectrumCanvas"></canvas>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -406,8 +809,10 @@
             const db = rms > 0 ? 20 * Math.log10(rms / 0.00002) : -100;
             currentNoiseLevel = Math.round(db);
             
-            // Update display
+            // Update display with animation
+            dbDisplay.classList.add('db-updating');
             dbDisplay.textContent = currentNoiseLevel;
+            setTimeout(() => dbDisplay.classList.remove('db-updating'), 500);
             
             // Auto-adjust volume if enabled
             if (autoAdjustEnabled && gainNode && audioCtx) {
@@ -430,7 +835,10 @@
                 // Approximate dB output based on gain
                 // This is a simplified calculation - actual dB depends on system volume
                 const maskingDb = Math.round(20 * Math.log10(gainValue * 0.5 / 0.00002));
+                // Update display with animation
+                maskingDbDisplay.classList.add('db-updating');
                 maskingDbDisplay.textContent = Math.max(0, maskingDb);
+                setTimeout(() => maskingDbDisplay.classList.remove('db-updating'), 500);
             }
         }
 
@@ -440,8 +848,18 @@
             
             analyser.getByteFrequencyData(dataArray);
             
-            canvasCtx.fillStyle = 'rgb(0, 0, 0)';
+            // Clear canvas with radial gradient background
+            const bgGradient = canvasCtx.createRadialGradient(
+                spectrumCanvas.width / 2, spectrumCanvas.height / 2,
+                0, spectrumCanvas.width / 2, spectrumCanvas.height / 2, spectrumCanvas.width / 2
+            );
+            bgGradient.addColorStop(0, 'rgba(0, 0, 20, 0.8)');
+            bgGradient.addColorStop(1, 'rgba(0, 0, 0, 0.95)');
+            canvasCtx.fillStyle = bgGradient;
             canvasCtx.fillRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
+            
+            // Draw grid lines
+            drawGrid();
             
             const barWidth = (spectrumCanvas.width / dataArray.length) * 2.5;
             let x = 0;
@@ -449,30 +867,98 @@
             for (let i = 0; i < dataArray.length; i++) {
                 const barHeight = (dataArray[i] / 255) * spectrumCanvas.height;
                 
-                // Color based on frequency
-                let r, g, b;
-                if (i < dataArray.length * 0.2) { // Low frequencies
+                // Calculate frequency-based colors with neon glow
+                let r, g, b, glowR, glowG, glowB;
+                if (i < dataArray.length * 0.2) { // Low frequencies (neon red)
                     r = 255;
                     g = 0;
-                    b = 0;
-                } else if (i < dataArray.length * 0.7) { // Mid frequencies (voice range)
-                    r = 255;
+                    b = 100;
+                    glowR = 255;
+                    glowG = 0;
+                    glowB = 100;
+                } else if (i < dataArray.length * 0.7) { // Mid frequencies (neon yellow/green)
+                    r = 100;
                     g = 255;
-                    b = 0;
-                } else { // High frequencies
+                    b = 150;
+                    glowR = 100;
+                    glowG = 255;
+                    glowB = 150;
+                } else { // High frequencies (neon blue)
                     r = 0;
-                    g = 255;
+                    g = 200;
                     b = 255;
+                    glowR = 0;
+                    glowG = 200;
+                    glowB = 255;
                 }
                 
-                canvasCtx.fillStyle = `rgb(${r},${g},${b})`;
-                canvasCtx.fillRect(x, spectrumCanvas.height - barHeight, barWidth, barHeight);
+                // Create glowing effect
+                canvasCtx.shadowColor = `rgba(${glowR}, ${glowG}, ${glowB}, 0.8)`;
+                canvasCtx.shadowBlur = 15;
+                
+                // Create gradient for bar
+                const barGradient = canvasCtx.createLinearGradient(
+                    x, spectrumCanvas.height - barHeight, 
+                    x, spectrumCanvas.height
+                );
+                barGradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 1)`);
+                barGradient.addColorStop(0.6, `rgba(${r}, ${g}, ${b}, 0.7)`);
+                barGradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0.2)`);
+                
+                canvasCtx.fillStyle = barGradient;
+                
+                // Draw rounded top bar
+                const barRadius = barWidth / 2;
+                canvasCtx.fillRect(x, spectrumCanvas.height - barHeight + barRadius, barWidth, barHeight - barRadius);
+                canvasCtx.beginPath();
+                canvasCtx.arc(x + barRadius, spectrumCanvas.height - barHeight + barRadius, barRadius, 0, Math.PI * 2);
+                canvasCtx.fill();
+                
+                // Reset shadow for next bar
+                canvasCtx.shadowBlur = 0;
+                
+                // Draw subtle light reflection on top
+                canvasCtx.fillStyle = `rgba(255, 255, 255, 0.3)`;
+                canvasCtx.fillRect(x + barWidth * 0.25, spectrumCanvas.height - barHeight + barRadius, barWidth * 0.5, 2);
                 
                 x += barWidth + 1;
             }
             
+            // Add subtle scan line effect
+            drawScanLines();
+            
             // Continue animation
             requestAnimationFrame(drawSpectrum);
+        }
+        
+        // Draw grid lines for spectrum analyzer
+        function drawGrid() {
+            canvasCtx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
+            canvasCtx.lineWidth = 1;
+            
+            // Horizontal lines
+            for (let y = 0; y < spectrumCanvas.height; y += spectrumCanvas.height / 10) {
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(0, y);
+                canvasCtx.lineTo(spectrumCanvas.width, y);
+                canvasCtx.stroke();
+            }
+            
+            // Vertical lines
+            for (let x = 0; x < spectrumCanvas.width; x += spectrumCanvas.width / 20) {
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(x, 0);
+                canvasCtx.lineTo(x, spectrumCanvas.height);
+                canvasCtx.stroke();
+            }
+        }
+        
+        // Draw scan lines effect
+        function drawScanLines() {
+            canvasCtx.fillStyle = 'rgba(0, 255, 255, 0.03)';
+            for (let y = 0; y < spectrumCanvas.height; y += 2) {
+                canvasCtx.fillRect(0, y, spectrumCanvas.width, 1);
+            }
         }
 
         // Initialize app
