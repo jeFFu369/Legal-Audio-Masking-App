@@ -1,6 +1,6 @@
 {
     "cleanUrls": true,
     "rewrites": [
-        { "source": "/", "destination": "/your-file-name.html" }
+        { "source": "/", "destination": "/Legal_Audio_Masking_App.html" }
     ]
 }
