@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legal Audio Masking App</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .warning { background-color: #ffcccc; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+        .controls { margin: 20px 0; }
+        button { padding: 10px 20px; margin: 5px; }
+        #dbDisplay, #maskingDbDisplay { font-size: 24px; font-weight: bold; color: #333; }
+        #maskingDbDisplay { color: #0066cc; }
+        .meter { background: #f0f0f0; border-radius: 5px; padding: 10px; margin: 10px 0; }
+        .spectrum-container { width: 100%; height: 200px; background: #111; border-radius: 5px; margin: 10px 0; }
+        #spectrumCanvas { width: 100%; height: 100%; }
+        .auto-container { margin: 15px 0; padding: 10px; background: #e6f3ff; border-radius: 5px; }
+        .timer-container { margin: 15px 0; padding: 10px; background: #f0f8ff; border-radius: 5px; }
+        select, input[type="range"], input[type="number"] { margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <div class="warning">
+        <strong>WARNING:</strong> Use only for personal noise reduction. Keep volume within local legal limits.
+        <br>Recommended: Keep masking volume 3-5 dB above intrusive sound for optimal effectiveness.
+    </div>
+    
+    <h1>Legal Audio Masking App</h1>
+    
+    <div class="controls">
+        <div class="meter">
+            <p>Current Noise Level: <span id="dbDisplay">---</span> dB</p>
+            <p>Masking Output Level: <span id="maskingDbDisplay">---</span> dB</p>
+        </div>
+        
+        <button id="startBtn">Start Masking</button>
+        <button id="stopBtn">Stop Masking</button>
+        <br>
+        
+        <label>
+            Noise Type:
+            <select id="noiseTypeSelect">
+                <option value="pink" selected>Pink Noise (Most Effective)</option>
+                <option value="white">White Noise</option>
+                <option value="brown">Brown Noise</option>
+            </select>
+        </label>
+        <br>
+        
+        <label>
+            Masking Volume:
+            <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.5">
+            <span id="volumeValue">50%</span>
+        </label>
+        <br>
+        
+        <label>
+            Frequency Focus (Hz):
+            <select id="freqSelect">
+                <option value="all">All Frequencies</option>
+                <option value="voice" selected>Voice Range (200-3000Hz) - Optimal for Speech Masking</option>
+                <option value="low">Low Frequencies (50-200Hz)</option>
+                <option value="high">High Frequencies (3000-8000Hz)</option>
+            </select>
+        </label>
+        
+        <div class="auto-container">
+            <label>
+                <input type="checkbox" id="autoAdjust" checked>
+                Auto-Adjust Volume (Maintain 4 dB above background noise)
+            </label>
+        </div>
+        
+        <div class="timer-container">
+            <label>
+                Run for: <input type="number" id="timerMinutes" min="1" max="120" value="15"> minutes
+                <button id="setTimerBtn">Set Timer</button>
+            </label>
+            <p>Timer Status: <span id="timerStatus">Not Set</span></p>
+        </div>
+        
+        <div class="spectrum-container">
+            <canvas id="spectrumCanvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Audio context setup
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx, noiseSource, gainNode, analyser, lowFilter, highFilter, dataArray;
+        let noiseStream, noiseAnalyser, noiseDataArray;
+        let timerInterval = null;
+        let currentNoiseLevel = 0;
+        let autoAdjustEnabled = true;
+
+        // DOM elements
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const volumeValue = document.getElementById('volumeValue');
+        const freqSelect = document.getElementById('freqSelect');
+        const noiseTypeSelect = document.getElementById('noiseTypeSelect');
+        const dbDisplay = document.getElementById('dbDisplay');
+        const maskingDbDisplay = document.getElementById('maskingDbDisplay');
+        const autoAdjust = document.getElementById('autoAdjust');
+        const timerMinutes = document.getElementById('timerMinutes');
+        const setTimerBtn = document.getElementById('setTimerBtn');
+        const timerStatus = document.getElementById('timerStatus');
+        const spectrumCanvas = document.getElementById('spectrumCanvas');
+        const canvasCtx = spectrumCanvas.getContext('2d');
+
+        // Set canvas dimensions
+        function resizeCanvas() {
+            spectrumCanvas.width = spectrumCanvas.offsetWidth;
+            spectrumCanvas.height = spectrumCanvas.offsetHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Generate white noise buffer
+        function generateWhiteNoise(bufferSize, sampleRate) {
+            const buffer = audioCtx.createBuffer(1, bufferSize, sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            return buffer;
+        }
+
+        // Generate pink noise buffer (improved implementation)
+        function generatePinkNoise(bufferSize, sampleRate) {
+            const buffer = audioCtx.createBuffer(1, bufferSize, sampleRate);
+            const data = buffer.getChannelData(0);
+            let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+            const gain = 0.15;
+
+            for (let i = 0; i < bufferSize; i++) {
+                const white = Math.random() * 2 - 1;
+                b0 = 0.99886 * b0 + white * 0.0555179;
+                b1 = 0.99332 * b1 + white * 0.0750759;
+                b2 = 0.96900 * b2 + white * 0.1538520;
+                b3 = 0.86650 * b3 + white * 0.3104856;
+                b4 = 0.55000 * b4 + white * 0.5329522;
+                b5 = -0.7616 * b5 - white * 0.0168980;
+                data[i] = gain * (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) / 3;
+                b6 = white * 0.115926;
+            }
+            return buffer;
+        }
+
+        // Generate brown noise buffer
+        function generateBrownNoise(bufferSize, sampleRate) {
+            const buffer = audioCtx.createBuffer(1, bufferSize, sampleRate);
+            const data = buffer.getChannelData(0);
+            let lastOut = 0;
+            const gain = 0.02;
+
+            for (let i = 0; i < bufferSize; i++) {
+                const white = Math.random() * 2 - 1;
+                data[i] = (lastOut + (0.02 * white)) / 1.02;
+                lastOut = data[i];
+                data[i] *= gain * 3.5; // Apply gain and normalize
+            }
+            return buffer;
+        }
+
+        // Create noise source based on type
+        function createNoiseSource(noiseType) {
+            const bufferSize = audioCtx.sampleRate * 2; // 2 seconds buffer
+            let buffer;
+            
+            switch (noiseType) {
+                case 'white':
+                    buffer = generateWhiteNoise(bufferSize, audioCtx.sampleRate);
+                    break;
+                case 'pink':
+                    buffer = generatePinkNoise(bufferSize, audioCtx.sampleRate);
+                    break;
+                case 'brown':
+                    buffer = generateBrownNoise(bufferSize, audioCtx.sampleRate);
+                    break;
+                default:
+                    buffer = generatePinkNoise(bufferSize, audioCtx.sampleRate);
+            }
+            
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.loop = true;
+            return source;
+        }
+
+        // Initialize audio context with proper nodes
+        function initAudio() {
+            audioCtx = new AudioContext();
+            gainNode = audioCtx.createGain();
+            analyser = audioCtx.createAnalyser();
+            lowFilter = audioCtx.createBiquadFilter();
+            highFilter = audioCtx.createBiquadFilter();
+            
+            // Configure analyser for spectrum display
+            analyser.fftSize = 512;
+            const bufferLength = analyser.frequencyBinCount;
+            dataArray = new Uint8Array(bufferLength);
+            
+            // Configure filters
+            lowFilter.type = 'highpass';
+            highFilter.type = 'lowpass';
+            
+            // Set initial volume
+            gainNode.gain.value = parseFloat(volumeSlider.value);
+            
+            // Apply initial frequency filter settings
+            updateFrequencyFilter();
+            
+            // Connect nodes: source → lowFilter → highFilter → analyser → gain → destination
+            // (source will be connected when noise type changes or masking starts)
+        }
+
+        // Update frequency filters based on selection
+        function updateFrequencyFilter() {
+            if (!lowFilter || !highFilter) return;
+            
+            const selection = freqSelect.value;
+            
+            switch (selection) {
+                case 'all':
+                    lowFilter.frequency.value = 20;   // Lowest audible frequency
+                    highFilter.frequency.value = 20000; // Highest audible frequency
+                    break;
+                case 'voice':
+                    lowFilter.frequency.value = 200;   // Voice range low end
+                    highFilter.frequency.value = 3000;  // Voice range high end
+                    break;
+                case 'low':
+                    lowFilter.frequency.value = 50;
+                    highFilter.frequency.value = 200;
+                    break;
+                case 'high':
+                    lowFilter.frequency.value = 3000;
+                    highFilter.frequency.value = 8000;
+                    break;
+            }
+            
+            // Set filter Q for better frequency shaping
+            lowFilter.Q.value = 0.707;
+            highFilter.Q.value = 0.707;
+        }
+
+        // Start masking
+        startBtn.addEventListener('click', () => {
+            if (!audioCtx) initAudio();
+            
+            // Create and connect noise source
+            noiseSource = createNoiseSource(noiseTypeSelect.value);
+            noiseSource.connect(lowFilter);
+            lowFilter.connect(highFilter);
+            highFilter.connect(analyser);
+            analyser.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            // Start noise source
+            noiseSource.start();
+            
+            // Start spectrum animation
+            drawSpectrum();
+            
+            // Update UI
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+        });
+
+        // Stop masking
+        stopBtn.addEventListener('click', () => {
+            if (noiseSource) {
+                noiseSource.stop();
+                noiseSource.disconnect();
+                noiseSource = null;
+            }
+            
+            if (audioCtx) {
+                audioCtx.close();
+                audioCtx = null;
+            }
+            
+            // Clear timer if running
+            clearTimer();
+            
+            // Update UI
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            timerStatus.textContent = 'Not Set';
+        });
+
+        // Volume control
+        volumeSlider.addEventListener('input', () => {
+            const value = parseFloat(volumeSlider.value);
+            volumeValue.textContent = Math.round(value * 100) + '%';
+            
+            if (gainNode) {
+                gainNode.gain.value = value;
+                updateMaskingDbDisplay();
+            }
+        });
+
+        // Noise type selection
+        noiseTypeSelect.addEventListener('change', () => {
+            if (audioCtx && noiseSource) {
+                // Restart with new noise type
+                noiseSource.stop();
+                noiseSource.disconnect();
+                noiseSource = createNoiseSource(noiseTypeSelect.value);
+                noiseSource.connect(lowFilter);
+                noiseSource.start();
+            }
+        });
+
+        // Frequency selection
+        freqSelect.addEventListener('change', updateFrequencyFilter);
+
+        // Auto-adjust toggle
+        autoAdjust.addEventListener('change', () => {
+            autoAdjustEnabled = autoAdjust.checked;
+        });
+
+        // Set timer button
+        setTimerBtn.addEventListener('click', () => {
+            const minutes = parseInt(timerMinutes.value);
+            if (minutes > 0) {
+                setTimer(minutes);
+            }
+        });
+
+        // Set timer function
+        function setTimer(minutes) {
+            clearTimer(); // Clear any existing timer
+            
+            const seconds = minutes * 60;
+            let remaining = seconds;
+            
+            timerStatus.textContent = `Running: ${minutes}m 0s`;
+            
+            timerInterval = setInterval(() => {
+                remaining--;
+                const mins = Math.floor(remaining / 60);
+                const secs = remaining % 60;
+                timerStatus.textContent = `Running: ${mins}m ${secs}s`;
+                
+                if (remaining <= 0) {
+                    clearTimer();
+                    stopBtn.click(); // Stop masking when timer ends
+                    timerStatus.textContent = 'Completed';
+                }
+            }, 1000);
+        }
+
+        // Clear timer
+        function clearTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        }
+
+        // Improved dB measurement using RMS
+        function measureNoise() {
+            navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false } })
+                .then(stream => {
+                    noiseStream = stream;
+                    const localAudioCtx = new AudioContext();
+                    const source = localAudioCtx.createMediaStreamSource(stream);
+                    noiseAnalyser = localAudioCtx.createAnalyser();
+                    
+                    // Configure for RMS measurement
+                    noiseAnalyser.fftSize = 1024;
+                    noiseAnalyser.smoothingTimeConstant = 0.8;
+                    
+                    source.connect(noiseAnalyser);
+                    
+                    const bufferLength = noiseAnalyser.frequencyBinCount;
+                    noiseDataArray = new Float32Array(bufferLength);
+                    
+                    // Start measurement loop
+                    measureLoop();
+                })
+                .catch(err => {
+                    console.error('Error accessing microphone:', err);
+                    dbDisplay.textContent = 'Mic Error';
+                });
+        }
+
+        // Measurement loop
+        function measureLoop() {
+            if (!noiseAnalyser) return;
+            
+            // Get RMS data
+            noiseAnalyser.getFloatTimeDomainData(noiseDataArray);
+            
+            // Calculate RMS value
+            let sumSquares = 0;
+            for (let i = 0; i < noiseDataArray.length; i++) {
+                sumSquares += noiseDataArray[i] * noiseDataArray[i];
+            }
+            const rms = Math.sqrt(sumSquares / noiseDataArray.length);
+            
+            // Convert RMS to dB (reference: 20e-6 Pa)
+            const db = rms > 0 ? 20 * Math.log10(rms / 0.00002) : -100;
+            currentNoiseLevel = Math.round(db);
+            
+            // Update display
+            dbDisplay.textContent = currentNoiseLevel;
+            
+            // Auto-adjust volume if enabled
+            if (autoAdjustEnabled && gainNode && audioCtx) {
+                const targetDb = currentNoiseLevel + 4; // 4 dB above background
+                const targetGain = Math.min(1, Math.pow(10, targetDb / 20) * 0.00002 * 100);
+                gainNode.gain.value = Math.min(1, targetGain);
+                volumeSlider.value = gainNode.gain.value;
+                volumeValue.textContent = Math.round(gainNode.gain.value * 100) + '%';
+                updateMaskingDbDisplay();
+            }
+            
+            // Continue loop
+            requestAnimationFrame(measureLoop);
+        }
+
+        // Update masking output dB display
+        function updateMaskingDbDisplay() {
+            if (gainNode) {
+                const gainValue = gainNode.gain.value;
+                // Approximate dB output based on gain
+                // This is a simplified calculation - actual dB depends on system volume
+                const maskingDb = Math.round(20 * Math.log10(gainValue * 0.5 / 0.00002));
+                maskingDbDisplay.textContent = Math.max(0, maskingDb);
+            }
+        }
+
+        // Draw spectrum analyzer
+        function drawSpectrum() {
+            if (!analyser) return;
+            
+            analyser.getByteFrequencyData(dataArray);
+            
+            canvasCtx.fillStyle = 'rgb(0, 0, 0)';
+            canvasCtx.fillRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
+            
+            const barWidth = (spectrumCanvas.width / dataArray.length) * 2.5;
+            let x = 0;
+            
+            for (let i = 0; i < dataArray.length; i++) {
+                const barHeight = (dataArray[i] / 255) * spectrumCanvas.height;
+                
+                // Color based on frequency
+                let r, g, b;
+                if (i < dataArray.length * 0.2) { // Low frequencies
+                    r = 255;
+                    g = 0;
+                    b = 0;
+                } else if (i < dataArray.length * 0.7) { // Mid frequencies (voice range)
+                    r = 255;
+                    g = 255;
+                    b = 0;
+                } else { // High frequencies
+                    r = 0;
+                    g = 255;
+                    b = 255;
+                }
+                
+                canvasCtx.fillStyle = `rgb(${r},${g},${b})`;
+                canvasCtx.fillRect(x, spectrumCanvas.height - barHeight, barWidth, barHeight);
+                
+                x += barWidth + 1;
+            }
+            
+            // Continue animation
+            requestAnimationFrame(drawSpectrum);
+        }
+
+        // Initialize app
+        function initApp() {
+            // Start noise measurement
+            if (navigator.mediaDevices) {
+                measureNoise();
+            }
+            
+            // Initialize UI
+            volumeValue.textContent = Math.round(parseFloat(volumeSlider.value) * 100) + '%';
+            stopBtn.disabled = true;
+        }
+
+        // Start app when page loads
+        window.addEventListener('load', initApp);
+    </script>
+</body>
+</html>
